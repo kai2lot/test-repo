@@ -54,7 +54,7 @@ git version 2.43.0
 
 ## 3. 수행 항목 체크리스트 및 검증 결과 링크
 
-- [x] **터미널 기본 조작 및 폴더 구성** (`pwd`, `ls -la`, `cd`, `mkdir -p`, `touch`, `cp`, `mv`, `rm`, `cat`) 👉 [4.1 터미널 조작 로그](#41-터미널-기본-조작-로그)
+- [x] **터미널 기본 조작 및 디렉토리 구조 설계** (`pwd`, `ls -la`, `cd`, `mkdir -p`, `touch`, `cp`, `mv`, `rm`, `cat`) 👉 [3.1 프로젝트 디렉토리 구조 설계 기준 및 역할](#31-프로젝트-최상위-디렉토리-구조-및-설계-기준) & [4.1 터미널 조작 로그](#41-터미널-기본-조작-로그)
 - [x] **파일 및 디렉토리 권한 변경 실습** (`chmod 644`, `chmod 755`, 변경 전/후 비교 및 스크립트 실행) 👉 [4.2 권한 실습 및 증거 기록](#42-권한-실습-및-증거-기록)
 - [x] **Docker 설치 및 데몬 동작 점검** (`docker --version`, `docker info`) 👉 [5.1 Docker 설치 및 기본 점검](#51-docker-설치-및-기본-점검)
 - [x] **Docker 기본 운영 및 컨테이너 실행 실습** (`hello-world`, `ubuntu` 백그라운드 실행 및 `docker exec`, `images`, `ps -a`, `logs`, `stats`) 👉 [5.2 컨테이너 실행 및 운영 실습](#52-컨테이너-실행-및-기본-운영-명령-실습)
@@ -71,6 +71,7 @@ git version 2.43.0
 
 | 검증 항목 | 검증 명령어 | 결과 확인 위치 |
 | :--- | :--- | :--- |
+| 디렉토리 구조 및 역할 확인 | `ls -la`, `tree -a -I .git` | [3.1장 디렉토리 설계 기준](#31-프로젝트-최상위-디렉토리-구조-및-설계-기준) |
 | 터미널/권한 자동 재현 | `bash scripts/lab_step1_terminal_perm.sh` | [4장 로그](#4-터미널-조작-및-권한-실습-로그) / [`scripts/lab_step1_terminal_perm.sh`](./scripts/lab_step1_terminal_perm.sh) |
 | Docker/볼륨/Compose 전체 검증 | `bash scripts/lab_step2_docker_all.sh` | [5~8장 로그](#5-docker-설치점검-및-운영-로그) / [`scripts/lab_step2_docker_all.sh`](./scripts/lab_step2_docker_all.sh) |
 | 포트 충돌 진단(`lsof`/`ss`/`netstat`) 및 해제 검증 | `bash scripts/lab_step3_port_conflict.sh` | [7.3장](#73-포트-충돌-진단lsof--ss--netstat-및-해제-절차-증거) & [11장 트러블슈팅 #1](#트러블슈팅-1-포트-충돌bind-for-00008080-failed-port-is-already-allocated-진단lsof--ss--netstat-및-해제-절차) / [`scripts/lab_step3_port_conflict.sh`](./scripts/lab_step3_port_conflict.sh) |
@@ -78,6 +79,62 @@ git version 2.43.0
 | 포트 매핑 접속 확인 | `curl -i http://localhost:8080` / `http://localhost:8081` | [7장 포트 매핑 증거](#7-포트-매핑-및-접속-증거) 및 `images/` 폴더 |
 | 바인드 마운트 & 볼륨 검증 | `curl http://localhost:8083` / `docker volume inspect mydata` | [8장 스토리지 증거](#8-바인드-마운트-반영-및-볼륨-영속성-증거) |
 | Git 설정 확인 | `git config --list` | [9장 Git 연동 증거](#9-git-설정-및-github--vscode-연동-증거) |
+
+---
+
+### 3.1 프로젝트 최상위 디렉토리 구조 및 설계 기준
+
+본 워크스테이션 저장소는 **관심사 분리(Separation of Concerns)**, **컨테이너 빌드 컨텍스트 최적화**, **재현성(Reproducibility) 보장**이라는 3가지 설계 기준에 따라 최상위 디렉토리를 구조화했습니다.
+
+#### (1) 디렉토리 구조 설계 기준 (Design Principles)
+1. **애플리케이션과 인프라 설정의 분리 (`app/` vs 루트 `Dockerfile`·`docker-compose.yml`)**:  
+   컨테이너 내부에 주입될 웹 소스코드 및 서버 설정 파일은 `app/` 하위로 격리하고, 컨테이너를 빌드·오케스트레이션하는 선언적 인프라 명세(`Dockerfile`, `docker-compose.yml`, `.env`)는 프로젝트 루트(최상위)에 배치하여 표준 Docker 프로젝트 컨벤션을 준수했습니다.
+2. **실행 자동화와 검증 재현성 분리 (`scripts/`)**:  
+   수동으로 터미널에 입력한 명령어가 일회성으로 휘발되지 않도록, 단계별 검증 시나리오(터미널/권한 → Docker/볼륨/Compose → 포트 충돌 진단/해제)를 `scripts/` 폴더 아래 독립된 쉘 스크립트(`755` 권한)로 모듈화하여 평가자 누구나 한 줄의 명령으로 동일한 결과를 재현할 수 있게 설계했습니다.
+3. **문서와 시각적 증빙 자산의 분리 (`README.md` vs `images/`)**:  
+   기술 문서(`README.md`)가 루트에서 전체 아키텍처와 로그의 진입점(Single Source of Truth) 역할을 수행하고, 포트 매핑 및 IDE 연동 캡처 이미지들은 `images/` 디렉토리에 별도 보관하여 루트 디렉토리의 복잡도를 낮추었습니다.
+4. **환경 종속성 및 보안/형상관리 통제 (`.vscode/`, `.gitignore`, `.gitattributes`)**:  
+   Windows 호스트와 Linux(WSL2) 컨테이너 환경 간의 줄바꿈(`LF` 고정) 차이 및 개인키/민감정보 유출을 원천 차단하기 위해 Git 제어 파일들을 루트에 배치했습니다.
+
+#### (2) 프로젝트 전체 디렉토리 트리 (Directory Tree)
+```text
+worksm/ (Repository Root)
+├── app/                                  # [Application Layer] 컨테이너에 탑재될 웹 서버 정적 소스 및 설정
+│   ├── index.html                        #   └─ 커스텀 웹 서버 메인 응답 페이지 (HTML5/CSS3)
+│   └── default.conf                      #   └─ NGINX 가상 호스트 설정 (/health 엔드포인트 및 커스텀 헤더 정의)
+├── scripts/                              # [Automation & Verification Layer] 실습 재현 및 검증 자동화 스크립트 모음
+│   ├── lab_step1_terminal_perm.sh        #   └─ 1단계: 리눅스 CLI 기본 조작 및 파일/디렉토리 권한(644/755) 실험 자동화
+│   ├── lab_step2_docker_all.sh           #   └─ 2단계: Docker 빌드, 포트 매핑, 바인드 마운트, 볼륨 영속성, Compose 통합 검증
+│   └── lab_step3_port_conflict.sh        #   └─ 3단계: 포트 충돌 재현, 진단(lsof/ss/netstat) 및 점유 해제(stop/kill) 검증
+├── images/                               # [Evidence Assets Layer] 과제 검증용 브라우저/IDE 스크린샷 증빙 보관소
+│   ├── port-8080.png                     #   └─ 호스트 포트 8080 -> 컨테이너 80 접속 성공 화면 (주소창 포함)
+│   ├── port-8081.png                     #   └─ 호스트 포트 8081 -> 컨테이너 80 접속 성공 화면 (주소창 포함)
+│   ├── bind-mount-8083.png               #   └─ 바인드 마운트(8083) 호스트 파일 실시간 수정 반영 화면
+│   ├── git-vscode-sync.png               #   └─ VSCode Git 소스 제어(main 브랜치) 및 GitHub 원격 연동 화면
+│   └── SCREENSHOT_LIST.md                #   └─ 증빙 이미지 파일 명세서
+├── .vscode/                              # [IDE Configuration Layer] 워크스페이스 에디터/터미널 연동 설정
+│   └── settings.json                     #   └─ VSCode 기본 터미널(WSL Ubuntu-24.04) 및 Git 그래프/동기화 UI 표시 설정
+├── Dockerfile                            # [Container Build Spec] nginx:alpine 기반 커스텀 이미지 빌드 명세서
+├── docker-compose.yml                    # [Multi-Container Spec] 웹 서버(web) + 캐시(cache-redis) 멀티 컨테이너 정의서
+├── .env                                  # [Environment Config] 포트(8082), 실행 모드(APP_ENV), 타임존(TZ) 환경 변수 분리 파일
+├── .gitattributes                        # [VCS Normalization] OS 간 줄바꿈(CRLF/LF) 충돌 방지 규칙 (.sh, Dockerfile LF 강제)
+├── .gitignore                            # [Security & Hygiene] 개인키(*.pem, id_ed25519*), 비밀 환경변수, 임시 로그 추적 제외 규칙
+└── README.md                             # [Technical Documentation] 프로젝트 아키텍처, 수행 로그, 개념 정리, 트러블슈팅 통합 문서
+```
+
+#### (3) 각 폴더 및 핵심 파일의 역할과 책임 (Responsibilities Matrix)
+
+| 구분 (폴더/파일) | 계층 (Layer) | 핵심 역할 및 책임 (Responsibility) | 권장 권한 |
+| :--- | :--- | :--- | :---: |
+| **`app/`** | 애플리케이션 계층 | - 컨테이너 이미지 빌드 시 `COPY` 되거나 바인드 마운트(`-v ./app:/usr/share/nginx/html:ro`)로 연결되는 **정적 웹 콘텐츠(`index.html`)와 웹 서버 라우팅/헬스체크 설정(`default.conf`)**을 담당합니다.<br>- 인프라 코드와 비즈니스/프론트엔드 정적 자산을 격리하여 유지보수성을 높입니다. | 디렉토리 `755`<br>내부 파일 `644` |
+| **`scripts/`** | 검증 및 자동화 계층 | - 리눅스 CLI 조작, 권한 실습, Docker 컨테이너 운영, 볼륨 영속성, 포트 충돌 진단(`lsof`/`ss`/`netstat`) 및 해제 과정을 **코드화(Executable Documentation)**한 쉘 스크립트 폴더입니다.<br>- 수동 작업 실수를 방지하고 제3자(평가자/팀원)의 100% 재현성을 보장합니다. | 디렉토리 `755`<br>스크립트 `755` |
+| **`images/`** | 시각적 증빙 계층 | - CLI 텍스트 로그만으로 확인하기 어려운 **브라우저 렌더링 결과(주소창 포트 포함)와 VSCode GitHub 연동 UI 증거 이미지**를 체계적으로 관리하는 정적 자산 폴더입니다. | 디렉토리 `755`<br>이미지 `644` |
+| **`.vscode/`** | 개발 도구 설정 계층 | - 팀원 간 동일한 에디터 환경을 공유하기 위한 폴더로, Windows 환경에서도 터미널 실행 시 즉시 **WSL `Ubuntu-24.04` 쉘이 열리고 Git `main` 브랜치/원격 상태가 표시**되도록 책임을 집니다. | 디렉토리 `755`<br>설정 파일 `644` |
+| **`Dockerfile`** | 컨테이너 이미지 명세 | - 베이스 이미지(`nginx:alpine`), 메타데이터(`LABEL`), 환경변수(`ENV`), 패키지 설치(`curl`), 설정/소스 복사(`COPY`), 상태 점검(`HEALTHCHECK`)을 코드로 정의하여 **불변(Immutable) 커스텀 이미지**를 생성합니다. | `644` |
+| **`docker-compose.yml` & `.env`** | 오케스트레이션 및 설정 분리 | - 단일 `docker run` 명령의 복잡한 플래그들을 선언적 YAML로 문서화하고, 포트/환경변수(`.env`)를 코드에서 분리하며, 멀티 컨테이너(`web` + `cache-redis`)와 가상 브리지 네트워크(`workstation-net`) 및 영속 볼륨(`redis-data`)의 생명주기를 일괄 관리합니다. | `644` |
+| **`.gitignore` & `.gitattributes`** | 보안 및 형상관리 규약 | - `.gitignore`는 SSH 개인키(`id_ed25519`), 토큰, 로컬 비밀 파일이 원격 저장소에 유출되는 것을 방지합니다.<br>- `.gitattributes`는 Windows(`CRLF`)와 Linux(`LF`) 혼합 작업 시 쉘 스크립트가 깨지지 않도록 `LF` 개행을 강제합니다. | `644` |
+| **`README.md`** | 기술 문서 (SSOT) | - 과제 개요, 실행 환경, 디렉토리 설계 기준, 전체 명령어/출력 로그, 핵심 원리 설명, 트러블슈팅 4건, 재현 가이드를 총괄하는 **단일 진실 공급원(Single Source of Truth)** 역할을 수행합니다. | `644` |
+| **`~/codyssey/`** *(WSL 내부 실습 공간)* | 샌드박스 실습 공간 | - Git 저장소를 임시 실험 파일(`empty.txt`, `hello_moved.txt`, `perm_lab/run.sh`, `bind_mount_site/`)로 오염시키지 않기 위해 리눅스 홈 디렉토리(`~/codyssey/`) 아래에 별도로 구성한 **격리된 CLI/권한/바인드마운트 실험용 작업 공간**입니다. | 디렉토리 `755`<br>실행파일 `755` |
 
 ---
 
