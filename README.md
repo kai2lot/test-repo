@@ -60,10 +60,11 @@ git version 2.43.0
 - [x] **Docker 기본 운영 및 컨테이너 실행 실습** (`hello-world`, `ubuntu` 백그라운드 실행 및 `docker exec`, `images`, `ps -a`, `logs`, `stats`) 👉 [5.2 컨테이너 실행 및 운영 실습](#52-컨테이너-실행-및-기본-운영-명령-실습)
 - [x] **커스텀 `Dockerfile` 기반 웹 서버 이미지 제작** ([`Dockerfile`](./Dockerfile), [`app/index.html`](./app/index.html), [`app/default.conf`](./app/default.conf)) 👉 [6. 커스텀 Dockerfile 이미지 제작](#6-커스텀-dockerfile-기반-웹-서버-컨테이너-제작)
 - [x] **포트 매핑 접속 검증 (2회 이상: `8080:80`, `8081:80`)** 👉 [7. 포트 매핑 및 접속 증거](#7-포트-매핑-및-접속-증거)
+- [x] **포트 충돌 진단(`lsof` / `ss` / `netstat`) 및 점유 해제 절차 검증** 👉 [7.3 포트 충돌 진단 및 해제 절차 증거](#73-포트-충돌-진단lsof--ss--netstat-및-해제-절차-증거)
 - [x] **바인드 마운트(Bind Mount) 호스트 파일 변경 즉시 반영 검증 (`8083:80`)** 👉 [8.1 바인드 마운트 실시간 반영 검증](#81-바인드-마운트bind-mount-실시간-변경-반영-검증)
 - [x] **Docker 볼륨(Volume) 컨테이너 삭제 전/후 데이터 영속성 검증 (`mydata`)** 👉 [8.2 Docker 볼륨 영속성 검증](#82-docker-볼륨volume-영속성-검증)
 - [x] **Git 사용자/기본 브랜치(`main`) 설정 및 GitHub/VSCode 연동** 👉 [9. Git 설정 및 GitHub 연동 증거](#9-git-설정-및-github--vscode-연동-증거)
-- [x] **트러블슈팅 2건 이상 기록 (문제 → 원인 가설 → 확인 → 해결)** 👉 [11. 트러블슈팅 (Troubleshooting)](#11-트러블슈팅-troubleshooting---문제--원인-가설--확인--해결)
+- [x] **트러블슈팅 2건 이상 기록 (포트 충돌 진단/해제 포함 4건)** 👉 [11. 트러블슈팅 (Troubleshooting)](#11-트러블슈팅-troubleshooting---문제--원인-가설--확인--해결)
 - [x] **[보너스 과제] Docker Compose 멀티 컨테이너 + 환경변수(`.env`) + 네트워크 통신 + SSH 키 설정** 👉 [12. 보너스 과제 수행 내역](#12-보너스-과제-수행-내역-docker-compose--환경-변수--ssh)
 
 ### 검증 방법 요약 테이블
@@ -72,6 +73,7 @@ git version 2.43.0
 | :--- | :--- | :--- |
 | 터미널/권한 자동 재현 | `bash scripts/lab_step1_terminal_perm.sh` | [4장 로그](#4-터미널-조작-및-권한-실습-로그) / [`scripts/lab_step1_terminal_perm.sh`](./scripts/lab_step1_terminal_perm.sh) |
 | Docker/볼륨/Compose 전체 검증 | `bash scripts/lab_step2_docker_all.sh` | [5~8장 로그](#5-docker-설치점검-및-운영-로그) / [`scripts/lab_step2_docker_all.sh`](./scripts/lab_step2_docker_all.sh) |
+| 포트 충돌 진단(`lsof`/`ss`/`netstat`) 및 해제 검증 | `bash scripts/lab_step3_port_conflict.sh` | [7.3장](#73-포트-충돌-진단lsof--ss--netstat-및-해제-절차-증거) & [11장 트러블슈팅 #1](#트러블슈팅-1-포트-충돌bind-for-00008080-failed-port-is-already-allocated-진단lsof--ss--netstat-및-해제-절차) / [`scripts/lab_step3_port_conflict.sh`](./scripts/lab_step3_port_conflict.sh) |
 | 커스텀 웹 서버 소스 및 설정 | `cat Dockerfile app/index.html app/default.conf` | [`Dockerfile`](./Dockerfile), [`app/`](./app) |
 | 포트 매핑 접속 확인 | `curl -i http://localhost:8080` / `http://localhost:8081` | [7장 포트 매핑 증거](#7-포트-매핑-및-접속-증거) 및 `images/` 폴더 |
 | 바인드 마운트 & 볼륨 검증 | `curl http://localhost:8083` / `docker volume inspect mydata` | [8장 스토리지 증거](#8-바인드-마운트-반영-및-볼륨-영속성-증거) |
@@ -373,11 +375,101 @@ CONTAINER ID   NAME          CPU %     MEM USAGE / LIMIT     MEM %     NET I/O  
 2cd2af543324   ubuntu-lab    0.00%     580KiB / 15.25GiB     0.00%     1.23kB / 126B     0B / 4.1kB    1
 ```
 
-### 브라우저 접속 화면 스크린샷
+### 7.2 브라우저 접속 화면 스크린샷
 - **`http://localhost:8080` 접속 화면**:  
   ![Port 8080 Screenshot](./images/port-8080.png)
 - **`http://localhost:8081` 접속 화면**:  
   ![Port 8081 Screenshot](./images/port-8081.png)
+
+### 7.3 포트 충돌 진단(`lsof` / `ss` / `netstat`) 및 해제 절차 증거
+
+동일한 호스트 포트(`8080`)에 두 번째 컨테이너(`conflict-test`)를 바인딩하거나 호스트 프로세스가 포트를 선점했을 때 발생하는 **포트 충돌(Port Conflict)**을 `lsof`, `ss`, `netstat` 3가지 네트워크 진단 도구로 추적하고 해제하는 전체 절차를 수행했습니다. (자동 재현 스크립트: [`scripts/lab_step3_port_conflict.sh`](./scripts/lab_step3_port_conflict.sh))
+
+#### (1) 포트 진단 핵심 명령어 비교 및 사용법
+
+| 진단 도구 | 실행 명령어 | 주요 옵션 의미 | 출력에서 확인하는 핵심 정보 |
+| :--- | :--- | :--- | :--- |
+| **`lsof`** | `sudo lsof -i :8080` | `-i :<port>`: 특정 네트워크 포트 열람 | `COMMAND`(프로세스명), `PID`(프로세스 ID), `USER`, `NAME`(`*:8080 (LISTEN)`) |
+| **`ss`** | `sudo ss -tulpn \| grep :8080` | `-t`(TCP) `-u`(UDP) `-l`(LISTEN) `-p`(PID/프로세스) `-n`(숫자 포트) | `Local Address:Port`(`0.0.0.0:8080`), `Process`(`users:(("docker-proxy",pid=828,fd=7))`) |
+| **`netstat`** | `sudo netstat -tulpn \| grep :8080` | `-t`(TCP) `-u`(UDP) `-l`(LISTEN) `-p`(PID/프로그램) `-n`(숫자 주소) | `Local Address`, `State`(`LISTEN`), `PID/Program name`(`828/docker-proxy`) |
+
+#### (2) 케이스 A: Docker 컨테이너 간 포트 충돌(`8080`) 진단 및 컨테이너 중지를 통한 해제 로그
+```bash
+# [Step 1] 이미 my-web-8080이 점유 중인 8080 포트에 두 번째 컨테이너(conflict-test) 실행 시도 -> 포트 충돌 발생
+$ docker run -d -p 8080:80 --name conflict-test my-web:1.0
+8c0df9a7f14a265a399fd531ef67a03275205969710a5647cc1ea10b7bfcd6da
+docker: Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint conflict-test (9e0f446f02340cc6b35ec85d66f0d7238e2c8883e07e1de98600cf2b9c3993e5): Bind for 0.0.0.0:8080 failed: port is already allocated
+
+# [Step 2] lsof로 8080 포트 점유 프로세스(PID) 진단
+$ sudo lsof -i :8080
+COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+docker-pr 828 root    7u  IPv4  51705      0t0  TCP *:http-alt (LISTEN)
+docker-pr 843 root    7u  IPv6  51706      0t0  TCP *:http-alt (LISTEN)
+
+# [Step 3] ss로 8080 포트 LISTEN 소켓 및 PID 진단
+$ sudo ss -tulpn | grep :8080
+tcp   LISTEN 0      4096          0.0.0.0:8080       0.0.0.0:*    users:(("docker-proxy",pid=828,fd=7))    
+tcp   LISTEN 0      4096             [::]:8080          [::]:*    users:(("docker-proxy",pid=843,fd=7))    
+
+# [Step 4] netstat으로 8080 포트 바인딩 및 PID/프로그램명 진단
+$ sudo netstat -tulpn | grep :8080
+tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      828/docker-proxy    
+tcp6       0      0 :::8080                 :::*                    LISTEN      843/docker-proxy    
+
+# [Step 5] docker-proxy가 어떤 컨테이너와 연결되어 있는지 필터링 조회
+$ docker ps --filter "publish=8080" --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"
+CONTAINER ID   NAMES         STATUS                    PORTS
+9d3541af88a9   my-web-8080   Up 47 minutes (healthy)   0.0.0.0:8080->80/tcp, [::]:8080->80/tcp
+
+# [Step 6] 포트 점유 해제 절차 (실패한 컨테이너 제거 + 점유 중인 컨테이너 중지 후 포트 반환 확인)
+$ docker rm -f conflict-test
+conflict-test
+
+$ docker stop my-web-8080
+my-web-8080
+
+$ sudo lsof -i :8080 || echo 'Port 8080 is now FREE (해제 완료)'
+Port 8080 is now FREE (해제 완료)
+
+$ sudo ss -tulpn | grep :8080 || echo 'No process listening on 8080'
+No process listening on 8080
+
+# [Step 7] 해제된 8080 포트 재기동 및 대체 포트(8081) 병행 바인딩 확인
+$ docker start my-web-8080
+my-web-8080
+
+$ sudo ss -tulpn | grep -E ':8080|:8081'
+tcp   LISTEN 0      4096          0.0.0.0:8080       0.0.0.0:*    users:(("docker-proxy",pid=9403,fd=7))   
+tcp   LISTEN 0      4096          0.0.0.0:8081       0.0.0.0:*    users:(("docker-proxy",pid=790,fd=7))    
+tcp   LISTEN 0      4096             [::]:8080          [::]:*    users:(("docker-proxy",pid=9409,fd=7))   
+tcp   LISTEN 0      4096             [::]:8081          [::]:*    users:(("docker-proxy",pid=803,fd=7))    
+```
+
+#### (3) 케이스 B: 일반 호스트 프로세스(`python3`)가 포트(`8090`)를 선점한 경우 `kill` 해제 절차 로그
+Docker 컨테이너가 아닌 일반 리눅스 백그라운드 프로세스가 포트를 점유하고 있을 때 `lsof`/`ss`/`netstat`으로 PID(`9451`)를 특정하고 `kill -9 <PID>`로 프로세스를 종료하여 포트를 회수한 증거입니다.
+
+```bash
+# 1. 호스트에서 8090 포트를 점유하는 백그라운드 웹 서버 실행
+$ python3 -m http.server 8090 >/dev/null 2>&1 &
+
+# 2. lsof / ss / netstat 3종 도구로 8090 포트 점유 PID(9451) 진단
+$ sudo lsof -i :8090
+COMMAND  PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+python3 9451 root    3u  IPv4  78558      0t0  TCP *:8090 (LISTEN)
+
+$ sudo ss -tulpn | grep :8090
+tcp   LISTEN 0      5             0.0.0.0:8090       0.0.0.0:*    users:(("python3",pid=9451,fd=3))        
+
+$ sudo netstat -tulpn | grep :8090
+tcp        0      0 0.0.0.0:8090            0.0.0.0:*               LISTEN      9451/python3        
+
+# 3. 확인된 PID(9451) 강제 종료 및 포트 해제 검증
+$ sudo kill -9 9451
+[1]+  Killed                  python3 -m http.server 8090 > /dev/null 2>&1
+
+$ sudo lsof -i :8090 || echo 'Host process killed -> Port 8090 is now FREE'
+Host process killed -> Port 8090 is now FREE
+```
 
 ---
 
@@ -511,7 +603,41 @@ remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
 
 ## 11. 트러블슈팅 (Troubleshooting - 문제 → 원인 가설 → 확인 → 해결)
 
-### 🚨 트러블슈팅 #1: Windows Docker Desktop 데몬 파이프 연결 실패 및 WSL 네이티브 Docker 전환
+### 🚨 트러블슈팅 #1: 포트 충돌(`Bind for 0.0.0.0:8080 failed: port is already allocated`) 진단(`lsof` / `ss` / `netstat`) 및 해제 절차
+- **1) 문제 현상 (Problem)**  
+  신규 웹 컨테이너(`conflict-test`)를 호스트 `8080` 포트로 매핑하여 실행(`docker run -d -p 8080:80 --name conflict-test my-web:1.0`)할 때 다음과 같은 에러가 발생하며 컨테이너 시작에 실패함:
+  ```text
+  docker: Error response from daemon: failed to set up container networking: driver failed programming external connectivity on endpoint conflict-test: Bind for 0.0.0.0:8080 failed: port is already allocated
+  ```
+- **2) 원인 가설 (Hypothesis)**  
+  하나의 호스트 IP/포트 조합(`0.0.0.0:8080`)에는 하나의 리스닝 소켓만 바인딩할 수 있는데, 이미 다른 Docker 컨테이너(`docker-proxy`) 또는 호스트 프로세스가 `8080` 포트를 선점(`LISTEN`)하고 있을 것으로 추정함.
+- **3) 확인 과정 (Verification - `lsof`, `ss`, `netstat` 진단)**  
+  리눅스 네트워크 소켓/포트 진단 명령어 3종(`lsof`, `ss`, `netstat`)과 `docker ps` 필터를 사용해 `8080` 포트를 점유 중인 프로세스(PID `828`, `843`)와 컨테이너(`my-web-8080`)를 정확히 특정함:
+  ```bash
+  $ sudo lsof -i :8080
+  COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME
+  docker-pr 828 root    7u  IPv4  51705      0t0  TCP *:http-alt (LISTEN)
+  docker-pr 843 root    7u  IPv6  51706      0t0  TCP *:http-alt (LISTEN)
+
+  $ sudo ss -tulpn | grep :8080
+  tcp   LISTEN 0      4096          0.0.0.0:8080       0.0.0.0:*    users:(("docker-proxy",pid=828,fd=7))    
+  tcp   LISTEN 0      4096             [::]:8080          [::]:*    users:(("docker-proxy",pid=843,fd=7))    
+
+  $ sudo netstat -tulpn | grep :8080
+  tcp        0      0 0.0.0.0:8080            0.0.0.0:*               LISTEN      828/docker-proxy    
+  tcp6       0      0 :::8080                 :::*                    LISTEN      843/docker-proxy    
+
+  $ docker ps --filter "publish=8080" --format "table {{.ID}}\t{{.Names}}\t{{.Status}}\t{{.Ports}}"
+  CONTAINER ID   NAMES         STATUS                    PORTS
+  9d3541af88a9   my-web-8080   Up 47 minutes (healthy)   0.0.0.0:8080->80/tcp, [::]:8080->80/tcp
+  ```
+- **4) 해결 및 대안 (Resolution - 포트 점유 해제 및 대체 포트 매핑)**  
+  - **해결책 A (기존 점유 프로세스/컨테이너 해제)**: 점유 중인 컨테이너를 중지(`docker stop my-web-8080`)하거나 일반 호스트 프로세스인 경우 `sudo kill -9 <PID>`로 종료한 뒤, `sudo lsof -i :8080` 및 `sudo ss -tulpn | grep :8080` 출력이 비어 있음(포트 반환 완료)을 확인하고 원하는 서비스를 기동함.
+  - **해결책 B (대체 호스트 포트 할당)**: 기존 `8080` 서비스를 유지해야 하는 경우 호스트 포트를 `8081`로 분리(`docker run -d -p 8081:80 --name my-web-8081 my-web:1.0`)하여 두 컨테이너가 충돌 없이 동시 실행되도록 해결함.
+
+---
+
+### 🚨 트러블슈팅 #2: Windows Docker Desktop 데몬 파이프 연결 실패 및 WSL 네이티브 Docker 전환
 - **1) 문제 현상 (Problem)**  
   터미널에서 `docker info` 및 `docker ps` 실행 시 다음과 같은 에러가 발생하며 컨테이너 제어가 불가능했음:
   ```text
@@ -533,7 +659,7 @@ remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
 
 ---
 
-### 🚨 트러블슈팅 #2: 상위 홈 디렉토리(`C:\Users\<User>\.git`) 잘못된 Git 초기화로 인한 추적 오염 및 설정 오타(`init.defaltbranch`) 해결
+### 🚨 트러블슈팅 #3: 상위 홈 디렉토리(`C:\Users\<User>\.git`) 잘못된 Git 초기화로 인한 추적 오염 및 설정 오타(`init.defaltbranch`) 해결
 - **1) 문제 현상 (Problem)**  
   작업 디렉토리(`Desktop/worksm`)에서 `git status` 및 `git config --list` 실행 시 두 가지 문제가 발견됨:
   1. `git status` 실행 시 `../../AppData/`, `../../NTUSER.DAT` 등 윈도우 사용자 홈 폴더 전체가 Untracked files로 잡히며 `Permission denied` 경고가 다수 출력됨.
@@ -544,7 +670,7 @@ remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
   - `git rev-parse --show-toplevel` 및 `git status`의 상대 경로(`../../`)를 통해 현재 폴더에 `.git`이 없고 상위 홈 디렉토리의 `.git`을 바라보고 있음을 확인.
   - `git config --list`에서 `init.defaltbranch=main` 항목과 `init.defaultbranch=master` 항목이 중복 등록된 것을 확인.
 - **4) 해결 및 대안 (Resolution)**  
-  1. 작업 폴더(`c:\Users\kai2lot7472\Desktop\worksm`) 내부에서 직접 `git init`을 수행하여 프로젝트 전용 독립 로컬 저장소(`.git`)를 생성함.
+  1. 작업 폴더(`c:\Users\kai2lot7472\Desktop\worksm`) 내부에서 직접 `git init`을 수행하여 프로젝트 전용 독립 로컬 저장소(`.git`)를 생성하고, 홈 디렉토리의 불필요한 `.git` 폴더를 제거함.
   2. 잘못 입력된 `init.defaltbranch` 설정을 제거(`--unset`)하고 올바른 `init.defaultBranch main` 설정 및 브랜치 이름 변경(`git branch -M main`)을 수행함.
   3. Windows와 WSL 간 파일시스템 공유 시 발생하는 소유권 경고 방지를 위해 `git config --global --add safe.directory /mnt/c/Users/kai2lot7472/Desktop/worksm`을 추가함.
   ```bash
@@ -556,13 +682,13 @@ remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
 
 ---
 
-### 🚨 트러블슈팅 #3: Windows에서 작성한 쉘 스크립트(`.sh`)를 WSL 리눅스에서 실행 시 `CRLF (\r)` 개행 문자 오류
+### 🚨 트러블슈팅 #4: Windows에서 작성한 쉘 스크립트(`.sh`)를 WSL 리눅스에서 실행 시 `CRLF (\r)` 개행 문자 오류
 - **1) 문제 현상 (Problem)**  
   Windows 파일시스템에서 생성한 스크립트를 WSL `bash`로 실행할 때 줄 끝의 캐리지 리턴(`\r`) 문자를 명령어의 일부로 인식하여 문법 오류 또는 예기치 않은 경고가 발생함.
 - **2) 원인 가설 (Hypothesis)**  
   Windows의 기본 줄바꿈 방식인 `CRLF (\r\n)`와 Linux의 줄바꿈 방식인 `LF (\n)` 차이로 인해 `bash` 인터프리터가 `\r`을 해석하지 못함.
 - **3) 확인 및 해결 (Verification & Resolution)**  
-  `sed -i 's/\r$//' scripts/*.sh` 명령으로 스크립트 내 `CRLF`를 `LF`로 일괄 변환한 후 정상 실행됨을 확인함.
+  `sed -i 's/\r$//' scripts/*.sh` 명령으로 스크립트 내 `CRLF`를 `LF`로 일괄 변환하고, `.gitattributes` 파일에 `*.sh text eol=lf` 규칙을 추가하여 영구 해결함.
 
 ---
 
@@ -694,6 +820,9 @@ bash scripts/lab_step1_terminal_perm.sh
 
 # 3. Docker 이미지 빌드, 포트 매핑(8080/8081), 바인드 마운트(8083), 볼륨 영속성, Compose(8082) 일괄 검증
 bash scripts/lab_step2_docker_all.sh
+
+# 4. 포트 충돌 진단(lsof / ss / netstat) 및 점유 해제(docker stop / kill -9) 절차 검증
+bash scripts/lab_step3_port_conflict.sh
 ```
 
 > **주의사항**: Windows(WSL2) 환경에서 실행할 경우 WSL 내부의 Docker 데몬(`service docker start`) 또는 Docker Desktop/OrbStack(macOS)이 실행 중이어야 합니다.
