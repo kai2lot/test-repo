@@ -1,0 +1,14 @@
+{
+  "git.enabled": true,
+  "git.autoRepositoryDetection": true,
+  "scm.alwaysShowRepositories": true,
+  "scm.alwaysShowActions": true,
+  "scm.repositories.visible": 10,
+  "git.showActionButton": {
+    "commit": true,
+    "publish": true,
+    "sync": true
+  },
+  "git.graph.showRemoteNames": true,
+  "terminal.integrated.defaultProfile.windows": "Ubuntu-24.04 (WSL)"
+}
