@@ -1,0 +1,39 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: my-web:1.0
+    container_name: compose-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_HOST_PORT:-8082}:80"
+    environment:
+      - APP_ENV=${APP_ENV:-development}
+      - TZ=${TZ:-Asia/Seoul}
+      - BACKEND_REDIS_HOST=${REDIS_HOST:-cache-redis}
+    volumes:
+      - ./app:/usr/share/nginx/html:ro
+    depends_on:
+      - cache-redis
+    networks:
+      - workstation-net
+
+  cache-redis:
+    image: redis:alpine
+    container_name: compose-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - workstation-net
+
+volumes:
+  redis-data:
+
+networks:
+  workstation-net:
+    driver: bridge
+
+

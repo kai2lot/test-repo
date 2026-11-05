@@ -1,0 +1,12 @@
+# 로그 및 임시 파일 제외
+*.log
+.DS_Store
+Thumbs.db
+
+# 개인키 및 민감 정보 절대 커밋 금지
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+.env.local
+.env.secret
