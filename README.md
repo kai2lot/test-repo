@@ -697,3 +697,4 @@ bash scripts/lab_step2_docker_all.sh
 ```
 
 > **주의사항**: Windows(WSL2) 환경에서 실행할 경우 WSL 내부의 Docker 데몬(`service docker start`) 또는 Docker Desktop/OrbStack(macOS)이 실행 중이어야 합니다.
+
